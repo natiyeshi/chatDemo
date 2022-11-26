@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
+    <title>socket</title>
+    <style>
+        .you{
+            color: red !important;
+        }
+        .other{
+            color:blue !important;
+        }
+    </style>
+</head>
+<body>
+    message <input type="text" id="input"> 
+    <button onclick="send()">send message</button> 
+    <br> <br> 
+    <button> <a href="/logout">logout</a> </button>
+    
+    <div id="users" class="users" style="
+        padding: 2em;
+    ">
+
+            
+    </div>
+
+    
+    <h2> Hi <i><span id="name"><%=name%></span></i>   </h2>
+    <div class="messages">
+       
+        <div class="mess" style="padding: 1em;">
+        
+        </div>
+    </div>
+    
+
+    <script>
+
+        let usersDom = document.getElementById("users")
+        let messDom = document.querySelector(".mess")
+        let makeTheUiDom = document.querySelector(".messages")
+       
+        let users = []
+        let messages = []
+
+        const nameOfUser = document.getElementById("name").innerHTML
+        localStorage.setItem("myName",nameOfUser)
+        localStorage.setItem("toUser",null)
+        const socket = io("http://localhost:3000")
+        socket.on("connection")
+        
+        socket.emit("addUser",{
+            name:localStorage.getItem("myName"),
+        })
+        
+        socket.on("message",(data)=>{
+            let {message,name} = data
+            messages.push({name,message})
+            console.log(localStorage.getItem("toUser"));
+            getAllMessages(localStorage.getItem("toUser"),localStorage.getItem("myName"))
+        })
+       
+        const send = async () =>{
+            var val = document.querySelector("#input").value
+            try {
+                let toUser = document.querySelector('input[name="users"]:checked').value;
+                socket.emit("message",{
+                    name:localStorage.getItem("myName"),
+                    message:val,
+                    toUser,
+                })
+               
+            }catch(e){
+               return alert("select valid user to send please")
+            }
+           
+        }
+        
+       
+        socket.on("finished",(data)=>{
+           getAllMessages(localStorage.getItem("myName"),localStorage.getItem("toUser"))
+        })
+        
+        socket.on("updateUsers",(data)=>{
+            users = data;
+            updateUsers(users)
+        })
+
+        function updateUsers(users){
+            console.log("updating");
+            usersDom.innerHTML = ""
+            users.forEach(element => {
+                if(localStorage.getItem("myName") != element) {
+                    usersDom.innerHTML += `<label for=""> ${element}
+                        <input type="radio" name="users" class='radioUsers' value="${element}">
+                        </label>
+                    `
+                }
+
+        });
+
+            let radios = document.querySelectorAll(".radioUsers")
+                for(var i = 0, max = radios.length; i < max; i++) {
+                    radios[i].onclick = async function() {
+                        localStorage.setItem("toUser",this.value)
+                        try{
+                            getAllMessages(localStorage.getItem("myName"),this.value)
+                        }catch(e){
+                            console.log(e);
+                        }
+                    }
+                }
+        }
+        function updateMessage(){
+            messDom.innerHTML = ""
+            messages.forEach(element => {
+                let newFile = document.createElement("p");
+                newFile.innerHTML = element.message
+                if(element.name == localStorage.getItem("myName")){
+                    newFile.classList.add("you")
+                } else {
+                    newFile.classList.add("other")
+                }
+                messDom.appendChild(newFile);
+            });
+        }
+        
+        async function getAllMessages(name,toUser) {
+            let xml = new XMLHttpRequest()
+            xml.open("GET",`/getMessages/${name}/${toUser}`)
+            xml.onload = async function(){
+                if(this.status == 200){
+                    let file = await JSON.parse(this.responseText)
+                    file = sortByTime(file)
+                    console.log(file);
+                    makeTheUi(file)
+                }
+            }
+            xml.send()
+        }
+
+        function makeTheUi(file) {
+            makeTheUiDom.innerHTML = ""
+            file.forEach(element =>{
+                let newChild = document.createElement("div")
+                if(element.msgTo == localStorage.getItem("myName")){
+                    newChild.classList.add("other")
+                    newChild.innerHTML = element.msgTo + " : "
+                }
+                else {
+                    newChild.classList.add("you")
+                    newChild.innerHTML = "you : "
+                    
+                }
+                newChild.innerHTML += element.msg
+                makeTheUiDom.appendChild(newChild)
+            })
+        }
+
+       function sortByTime(file){
+        bool = true
+        while(bool){
+            bool = false
+            for(let i = 0; i < file.length - 1; i++){
+                if(file[i].sendTime > file[i+1].sendTime){
+                    [file[i],file[i+1]] = [file[i+1],file[i]]
+                    bool = true
+                }
+            }
+        }
+        return file
+       }
+</script>
+</body>
+</html>
